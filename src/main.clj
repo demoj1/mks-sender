@@ -7,13 +7,17 @@
   (:import (java.net Socket SocketTimeoutException)
            (java.io DataInputStream DataOutputStream FileWriter File)))
 
-(def ^:private file-separator (File/separator))
-(def ^:private ^String tmp-file
+(def socket (atom nil))
+(def in (atom nil))
+(def out (atom nil))
+
+(def ^int mks-port 8080)
+(def socket-timeout 500)
+
+(def file-separator (File/separator))
+(def ^String tmp-file
   (.getAbsolutePath
     (io/file (System/getProperty "java.io.tmpdir") "mks-sender.log")))
-(def ^:private socket (atom nil))
-(def ^:private in (atom nil))
-(def ^:private out (atom nil))
 
 (defn- <-socket
   "Read message from socket"
@@ -35,6 +39,7 @@
 (defn- ok?
   "Assertion reaction on Gcode command"
   [pattern]
+  {:pre [(vector? pattern)]}
 
   (let [receive (<-socket)]
     (l/info (str "Expecting: " pattern " | Receive: " receive))
@@ -44,21 +49,27 @@
 (defn- ->socket
   "Write msg to socket"
   ([msg]
+   {:pre [(string? msg)]}
+
    (l/info (str "Write Gcode: " msg))
    (.write @out (.getBytes (str msg "\r\n"))))
-  ([msg pattern]
+  ([^String msg pattern]
+   {:pre [(string? msg)]}
+
    (->socket msg)
    (ok? pattern)))
 
-(defn- start-print [filename]
+(defn- start-print [filename] {:pre [(string? filename)]}
   (->socket (str "M23 " filename) ["File selected" "ok"])
   (->socket "M24 "))
 
-(defn- get-last-component [filename] (-> filename (str/split (re-pattern file-separator)) (last)))
+(defn- get-last-component [filename] {:pre [(string? filename)]}
+  (-> filename (str/split (re-pattern file-separator)) (last)))
 
 (defn- load-file-to-printer
   "HTTP upload file to printer"
   [path ip]
+  {:pre [(string? path) (string? ip)]}
 
   (let [last-component (get-last-component path)
         url (str "http://" ip "/upload?X-Filename=" last-component)]
@@ -72,8 +83,8 @@
   (binding [*out* (FileWriter. tmp-file)]
     (let [last-component (get-last-component path)]
       (l/info (str "-------" " Start print file: " path))
-      (reset! socket (Socket. ip 8080))
-      (.setSoTimeout @socket 500)
+      (reset! socket (Socket. ip mks-port))
+      (.setSoTimeout @socket socket-timeout)
       (reset! in (DataInputStream. (.getInputStream @socket)))
       (reset! out (DataOutputStream. (.getOutputStream @socket)))
       (load-file-to-printer path ip)
