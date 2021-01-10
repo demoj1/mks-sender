@@ -51,9 +51,8 @@
    (ok? pattern)))
 
 (defn- start-print [filename]
-  (do
-    (->socket (str "M23 " filename) ["File selected" "ok"])
-    (->socket "M24 ")))
+  (->socket (str "M23 " filename) ["File selected" "ok"])
+  (->socket "M24 "))
 
 (defn- get-last-component [filename] (-> filename (str/split (re-pattern file-separator)) (last)))
 
@@ -72,13 +71,12 @@
 (defn -main [^String ip ^String path]
   (binding [*out* (FileWriter. tmp-file)]
     (let [last-component (get-last-component path)]
-      (do
-        (l/info (str "-------" " Start print file: " path))
-        (reset! socket (Socket. ip 8080))
-        (.setSoTimeout @socket 500)
-        (reset! in (DataInputStream. (.getInputStream @socket)))
-        (reset! out (DataOutputStream. (.getOutputStream @socket)))
-        (load-file-to-printer path ip)
-        (->socket "M20")
-        (l/info (<-socket))
-        (start-print last-component)))))
+      (l/info (str "-------" " Start print file: " path))
+      (reset! socket (Socket. ip 8080))
+      (.setSoTimeout @socket 500)
+      (reset! in (DataInputStream. (.getInputStream @socket)))
+      (reset! out (DataOutputStream. (.getOutputStream @socket)))
+      (load-file-to-printer path ip)
+      (->socket "M20")
+      (l/info (<-socket))
+      (start-print last-component))))
