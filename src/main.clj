@@ -11,7 +11,7 @@
 (def in (atom nil))
 (def out (atom nil))
 
-(def ^int mks-port 8080)
+(def ^Integer mks-port 8080)
 (def socket-timeout 500)
 
 (def file-separator (File/separator))
@@ -38,8 +38,7 @@
 
 (defn- ok?
   "Assertion reaction on Gcode command"
-  [pattern]
-  {:pre [(vector? pattern)]}
+  [pattern] {:pre [(vector? pattern)]}
 
   (let [receive (<-socket)]
     (l/info (str "Expecting: " pattern " | Receive: " receive))
@@ -48,20 +47,19 @@
 
 (defn- ->socket
   "Write msg to socket"
-  ([msg]
-   {:pre [(string? msg)]}
+  ([msg] {:pre [(string? msg)]}
 
    (l/info (str "Write Gcode: " msg))
    (.write @out (.getBytes (str msg "\r\n"))))
-  ([^String msg pattern]
-   {:pre [(string? msg)]}
+
+  ([^String msg pattern] {:pre [(string? msg)]}
 
    (->socket msg)
    (ok? pattern)))
 
 (defn- start-print [filename] {:pre [(string? filename)]}
-  (->socket (str "M23 " filename) ["File selected" "ok"])
-  (->socket "M24 "))
+  (->socket (str "M23 " filename))
+  (->socket "M24"))
 
 (defn- get-last-component [filename] {:pre [(string? filename)]}
   (-> filename (str/split (re-pattern file-separator)) (last)))
@@ -79,8 +77,21 @@
     (client/post url {:body (clojure.java.io/file path)
                       :content-type "application/octet-stream"})))
 
+(defn trim-comment [^String path-in ^String path-out]
+  (with-open [rdr' (io/reader path-in)]
+    (loop [r rdr'
+           buffer ^StringBuffer (StringBuffer.)]
+      (if (.ready r)
+        (let [line (.readLine r)
+              line' (str/replace line #"( ;.*)|(^;.*)" "")]
+          (if (empty? line')
+            (recur r buffer)
+            (recur r (.append buffer (str line' \newline)))))
+        (spit path-out buffer)))))
+
 (defn -main [^String ip ^String path]
   (binding [*out* (FileWriter. tmp-file)]
+    (trim-comment path path)
     (let [last-component (get-last-component path)]
       (l/info (str "-------" " Start print file: " path))
       (reset! socket (Socket. ip mks-port))
